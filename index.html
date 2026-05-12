@@ -659,18 +659,23 @@ canvas#camera-canvas { display: none; }
 </div><!-- end .app -->
 
 <script>
-// ╔══════════════════════════════════════════════════════════════╗
-// ║  CONFIGURATION — IT TEAM: FILL IN THESE THREE VALUES        ║
-// ╠══════════════════════════════════════════════════════════════╣
-// ║  Get ANTHROPIC_API_KEY from: https://console.anthropic.com  ║
-// ║  Get APPS_SCRIPT_URL after deploying the Apps Script        ║
-// ║  Get SHEET_URL from your Google Sheet browser URL           ║
-// ╚══════════════════════════════════════════════════════════════╝
+// API key is stored securely inside Google Apps Script — not in this file
 const CONFIG = {
-  ANTHROPIC_API_KEY: 'YOUR_ANTHROPIC_API_KEY_HERE',
-  APPS_SCRIPT_URL:   'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE',
-  SHEET_URL:         'YOUR_GOOGLE_SHEET_URL_HERE'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxcWJLOHdG5mssvvVxa9HkFaLhQaCBPX2PjGElK3pivqLruNdCWli8c8RBfS7wenqbR/exec',
+  SHEET_URL:       'https://docs.google.com/spreadsheets/d/172VdNuCNZnIv32zMLSNlI5B9y2pW_zx2abjpPFBCDdo/edit?gid=1703777183#gid=1703777183'
 };
+
+async function callAI(imageBase64, systemPrompt, userPrompt) {
+  const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'scan', imageBase64, systemPrompt, userPrompt }),
+    redirect: 'follow'
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.text || '';
+}
 
 // ── STATE ──────────────────────────────────────────────────────
 const S = {
@@ -813,33 +818,16 @@ async function scanGrn(dataUrl, base64) {
   document.getElementById('grn-result').style.display = 'none';
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CONFIG.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514', max_tokens: 400,
-        system: `You are scanning a GRN warehouse label. Extract these exact fields:
+    const text = await callAI(base64,
+      `You are scanning a GRN warehouse label. Extract these exact fields:
 - item_no: the Item No. value (e.g. F0093)
 - lot_no: the Lot No. value (e.g. GRN-0211895)
 - best_before: the Best Before date (e.g. 11/10/27)
 - confidence: "high" if all fields are clearly readable, "low" if image is blurry, partial, or any field is unclear
-
-Return ONLY valid JSON with no markdown, no backticks, no extra text:
+Return ONLY valid JSON with no markdown, no backticks:
 {"item_no":"...","lot_no":"...","best_before":"...","confidence":"high"}`,
-        messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-          { type: 'text', text: 'Extract the GRN label fields.' }
-        ]}]
-      })
-    });
-    const data = await res.json();
-    const text = (data.content||[]).map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
-    const p = JSON.parse(text);
+      'Extract the GRN label fields.');
+    const p = JSON.parse(text.replace(/```json|```/g,'').trim());
     S.itemNo = p.item_no || ''; S.lotNo = p.lot_no || ''; S.bestBefore = p.best_before || '';
     document.getElementById('r-item-no').textContent     = S.itemNo     || '(not detected)';
     document.getElementById('r-lot-no').textContent      = S.lotNo      || '(not detected)';
@@ -872,33 +860,15 @@ async function scanContainer(dataUrl, base64) {
   document.getElementById('con-result').style.display = 'none';
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CONFIG.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514', max_tokens: 300,
-        system: `You are scanning a pallet container shipping label that has a barcode. 
-Extract the full number/code printed BELOW the barcode. 
-This is typically a long numeric code, sometimes formatted with spaces or parentheses e.g. (00) 0 0123456 000000001 8.
+    const text = await callAI(base64,
+      `You are scanning a pallet container shipping label with a barcode.
+Extract the full number/code printed BELOW the barcode.
+This is typically a long numeric code, sometimes with spaces or parentheses e.g. (00) 0 0123456 000000001 8.
 Return the complete number exactly as printed, removing only parentheses.
-- confidence: "high" if clearly readable, "low" if blurry or hard to read
-
-Return ONLY valid JSON:
-{"container_no":"...","confidence":"high"}`,
-        messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-          { type: 'text', text: 'Extract the container number below the barcode.' }
-        ]}]
-      })
-    });
-    const data = await res.json();
-    const text = (data.content||[]).map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
-    const p = JSON.parse(text);
+- confidence: "high" if clearly readable, "low" if blurry
+Return ONLY valid JSON: {"container_no":"...","confidence":"high"}`,
+      'Extract the container number below the barcode.');
+    const p = JSON.parse(text.replace(/```json|```/g,'').trim());
     S.containerNo = p.container_no || '';
     document.getElementById('r-container-no').textContent = S.containerNo || '(not detected)';
     document.getElementById('con-alert').innerHTML = p.confidence === 'low'
@@ -972,7 +942,7 @@ async function submitEntry() {
     await fetch(CONFIG.APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({action: 'submit', ...payload}),
       redirect: 'follow'
     });
     showSuccess();
