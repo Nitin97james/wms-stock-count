@@ -662,7 +662,7 @@ canvas#camera-canvas { display: none; }
 
 <script>
 const CONFIG = {
-  ANTHROPIC_API_KEY: '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',
+  ANTHROPIC_API_KEY: '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',
   APPS_SCRIPT_URL:   'https://script.google.com/macros/s/AKfycbxcWJLOHdG5mssvvVxa9HkFaLhQaCBPX2PjGElK3pivqLruNdCWli8c8RBfS7wenqbR/exec',
   SHEET_URL:         'https://docs.google.com/spreadsheets/d/172VdNuCNZnIv32zMLSNlI5B9y2pW_zx2abjpPFBCDdo/edit?gid=1703777183#gid=1703777183'
 };
@@ -677,7 +677,7 @@ async function callAI(imageBase64, systemPrompt, userPrompt) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 500,
       system: systemPrompt,
       messages: [{ role: 'user', content: [
@@ -867,7 +867,7 @@ Return ONLY valid JSON with no markdown, no backticks:
       : '';
     document.getElementById('grn-next-btn').disabled = false;
   } catch(err) {
-    document.getElementById('grn-alert').innerHTML = alertHtml('error','Scan failed. Please retake the photo and try again.');
+    document.getElementById('grn-alert').innerHTML = alertHtml('error','Scan failed: ' + (err.message || err) + ' — Please retake the photo and try again.');
     console.error(err);
   }
   document.getElementById('grn-processing').style.display = 'none';
@@ -905,7 +905,7 @@ Return ONLY valid JSON: {"container_no":"...","confidence":"high"}`,
       ? alertHtml('warning','Image quality appears low — please verify the number or retake the photo.')
       : '';
   } catch(err) {
-    document.getElementById('con-alert').innerHTML = alertHtml('error','Scan failed. Please retake the photo and try again.');
+    document.getElementById('con-alert').innerHTML = alertHtml('error','Scan failed: ' + (err.message || err) + ' — Please retake the photo and try again.');
     console.error(err);
   }
   document.getElementById('con-processing').style.display = 'none';
