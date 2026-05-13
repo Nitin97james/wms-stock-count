@@ -661,24 +661,36 @@ canvas#camera-canvas { display: none; }
 </div><!-- end .app -->
 
 <script>
-// API key is stored securely inside Google Apps Script — not in this file
 const CONFIG = {
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxcWJLOHdG5mssvvVxa9HkFaLhQaCBPX2PjGElK3pivqLruNdCWli8c8RBfS7wenqbR/exec',
-  SHEET_URL:       'https://docs.google.com/spreadsheets/d/172VdNuCNZnIv32zMLSNlI5B9y2pW_zx2abjpPFBCDdo/edit?gid=1703777183#gid=1703777183'
+  ANTHROPIC_API_KEY: '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',
+  APPS_SCRIPT_URL:   'https://script.google.com/macros/s/AKfycbxcWJLOHdG5mssvvVxa9HkFaLhQaCBPX2PjGElK3pivqLruNdCWli8c8RBfS7wenqbR/exec',
+  SHEET_URL:         'https://docs.google.com/spreadsheets/d/172VdNuCNZnIv32zMLSNlI5B9y2pW_zx2abjpPFBCDdo/edit?gid=1703777183#gid=1703777183'
 };
 
 async function callAI(imageBase64, systemPrompt, userPrompt) {
-  const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action: 'scan', imageBase64, systemPrompt, userPrompt }),
-    redirect: 'follow'
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': CONFIG.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 500,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
+        { type: 'text', text: userPrompt }
+      ]}]
+    })
   });
-  if (!res.ok) throw new Error('Server error: ' + res.status);
+  if (!res.ok) throw new Error('API error: ' + res.status);
   const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  if (!data.text) throw new Error('Empty response from server');
-  return data.text;
+  const text = (data.content||[]).map(b => b.text||'').join('');
+  if (!text) throw new Error('Empty response from API');
+  return text;
 }
 
 // ── STATE ──────────────────────────────────────────────────────
@@ -960,7 +972,7 @@ async function submitEntry() {
     await fetch(CONFIG.APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({action: 'submit', ...payload}),
+      body: JSON.stringify(payload),
       redirect: 'follow'
     });
     showSuccess();
